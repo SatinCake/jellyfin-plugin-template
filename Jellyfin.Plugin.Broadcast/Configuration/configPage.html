@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Broadcast</title>
+</head>
+<body>
+    <div id="BroadcastConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-textarea">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="BroadcastConfigForm">
+                    <h1>Broadcast</h1>
+
+                    <div id="statusSummary" class="paperList" style="padding:8px 12px;margin-bottom:12px;">
+                        <strong>Status:</strong>
+                        <div id="statusLibraries">Libraries: <em>Loading…</em></div>
+                        <div id="statusItems">Items: <em>Loading…</em></div>
+                        <div id="statusSchedule">Schedule: <em>Loading…</em></div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="CommercialsFolder">Commercials Folder</label>
+                        <input id="CommercialsFolder" name="CommercialsFolder" type="text" is="emby-input" />
+                        <div class="fieldDescription">Path to a folder containing videos to use as commercials.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="EpisodeDuration">Episode Duration (minutes)</label>
+                        <input id="EpisodeDuration" name="EpisodeDuration" type="number" is="emby-input" min="1" />
+                        <div class="fieldDescription">How long each show segment should play before potentially switching.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="CommercialFrequency">Commercial Frequency</label>
+                        <input id="CommercialFrequency" name="CommercialFrequency" type="number" is="emby-input" min="1" />
+                        <div class="fieldDescription">How many show segments to play before a commercial break.</div>
+                    </div>
+
+                    <div class="paperList">
+                        <h3 class="paperListHeader">Include Libraries</h3>
+                        <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:0.5em;">
+                            <button is="emby-button" type="button" id="btnRefreshLibraries" class="raised"><span>Refresh</span></button>
+                            <label style="display:flex;align-items:center;gap:.35rem;">
+                                <input id="toggleCounts" type="checkbox" is="emby-checkbox" />
+                                <span>Show item counts</span>
+                            </label>
+                        </div>
+                        <div id="librarySelection" class="paperList">
+                            <!-- Library checkboxes will be inserted here by script -->
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                        <div id="saveFeedback" style="margin-top:.5rem;color:var(--theme-text-color);display:none;">Saved.</div>
+                    </div>
+                </form>
+
+                <div class="section">
+                    <h2>Live TV (IPTV)</h2>
+                    <div class="paperList" style="padding:8px 12px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;">
+                        <label>Playlist (M3U)</label>
+                        <div style="display:flex;gap:.35rem;align-items:center;">
+                            <input id="urlM3u" type="text" is="emby-input" readonly />
+                            <button is="emby-button" type="button" id="copyM3u" class="raised mini"><span>Copy</span></button>
+                        </div>
+                        <label>EPG (XMLTV)</label>
+                        <div style="display:flex;gap:.35rem;align-items:center;">
+                            <input id="urlEpg" type="text" is="emby-input" readonly />
+                            <button is="emby-button" type="button" id="copyEpg" class="raised mini"><span>Copy</span></button>
+                        </div>
+                        <label>Stream</label>
+                        <div style="display:flex;gap:.35rem;align-items:center;">
+                            <input id="urlStream" type="text" is="emby-input" readonly />
+                            <button is="emby-button" type="button" id="copyStream" class="raised mini"><span>Copy</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Schedule</h2>
+                    <button is="emby-button" type="button" id="btnRegenerate" class="raised button-submit block emby-button">
+                        <span>Regenerate Broadcast Schedule</span>
+                    </button>
+                    <div id="scheduleDisplay" style="margin-top: 1em;">
+                        <!-- Schedule will be displayed here -->
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Diagnostics</h2>
+                    <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem;">
+                        <button is="emby-button" type="button" id="btnDiagConfig" class="raised">Config</button>
+                        <button is="emby-button" type="button" id="btnDiagLibraries" class="raised">Libraries</button>
+                        <button is="emby-button" type="button" id="btnDiagLibraryItems" class="raised">Library Items</button>
+                        <button is="emby-button" type="button" id="btnDiagCommercials" class="raised">Commercials</button>
+                        <button is="emby-button" type="button" id="btnDiagSchedule" class="raised">Schedule</button>
+                    </div>
+                    <div id="diagnosticsDisplay" class="paperList" style="white-space:pre-wrap;font-family:monospace;"></div>
+                </div>
+            </div>
+        </div>
+        <script type="text/javascript">
+            var BroadcastConfig = {
+                pluginUniqueId: 'eb5d7894-8eef-4b36-aa6f-5d124e828ce1'
+            };
+
+            function loadConfig(page) {
+                try {
+                    Dashboard.showLoadingMsg();
+                } catch(_) {}
+                ApiClient.getPluginConfiguration(BroadcastConfig.pluginUniqueId)
+                    .then(function (config) {
+                        if (!page) { return; }
+                        var cf = page.querySelector('#CommercialsFolder');
+                        var ed = page.querySelector('#EpisodeDuration');
+                        var cfreq = page.querySelector('#CommercialFrequency');
+                        if (!cf || !ed || !cfreq) {
+                            console && console.error && console.error('[Broadcast] Missing config inputs');
+                        } else {
+                            cf.value = config.CommercialsFolder || '';
+                            ed.value = config.EpisodeDuration || 30;
+                            cfreq.value = config.CommercialFrequency || 3;
+                        }
+                        loadLibraries(page, config.EnabledLibraryIds || []);
+                        refreshStatus(config);
+                        initLiveTvUrls();
+                    })
+                    .catch(function(err){
+                        console && console.error && console.error('[Broadcast] Failed to load plugin configuration', err);
+                    })
+                    .finally(function(){
+                        try { Dashboard.hideLoadingMsg(); } catch(_) {}
+                    });
+            }
+
+            function initLiveTvUrls() {
+                var base = window.location.origin;
+                var m3u = base + '/Broadcast/iptv/playlist.m3u';
+                var epg = base + '/Broadcast/iptv/epg.xml';
+                var stream = base + '/Broadcast/iptv/stream?channelId=broadcast-1';
+                var s = document;
+                s.querySelector('#urlM3u').value = m3u;
+                s.querySelector('#urlEpg').value = epg;
+                s.querySelector('#urlStream').value = stream;
+                function bindCopy(btnId, inputId) {
+                    var b = s.querySelector(btnId), i = s.querySelector(inputId);
+                    if (!b || !i) return;
+                    b.addEventListener('click', function(){
+                        navigator.clipboard && navigator.clipboard.writeText(i.value).then(function(){
+                            b.classList.add('emby-button-foreground');
+                            setTimeout(function(){ b.classList.remove('emby-button-foreground'); }, 600);
+                        });
+                    });
+                }
+                bindCopy('#copyM3u', '#urlM3u');
+                bindCopy('#copyEpg', '#urlEpg');
+                bindCopy('#copyStream', '#urlStream');
+            }
+
+            function refreshStatus(config) {
+                var sLib = document.querySelector('#statusLibraries');
+                var sItems = document.querySelector('#statusItems');
+                var sSched = document.querySelector('#statusSchedule');
+                sLib.textContent = 'Libraries: Loading…';
+                sItems.textContent = 'Items: Loading…';
+                sSched.textContent = 'Schedule: Loading…';
+
+                // Libraries count
+                ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Libraries'), type: 'GET' })
+                    .then(function(data){
+                        var arr = Array.isArray(data) ? data : (data && data.Items ? data.Items : data);
+                        var enabled = (config && Array.isArray(config.EnabledLibraryIds)) ? config.EnabledLibraryIds.length : 0;
+                        sLib.textContent = 'Libraries: ' + (arr ? arr.length : 0) + ' total, ' + enabled + ' selected';
+                    })
+                    .catch(function(){ sLib.textContent = 'Libraries: Error'; });
+
+                // Schedule summary
+                ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Schedule'), type: 'GET' })
+                    .then(function(data){
+                        if (!data) { sSched.textContent = 'Schedule: None'; return; }
+                        sSched.textContent = 'Schedule: ' + (data.Count || 0) + ' items, coverage ~' + (data.CoverageHours || 0).toFixed ? data.CoverageHours.toFixed(1) : data.CoverageHours + 'h';
+                    })
+                    .catch(function(){ sSched.textContent = 'Schedule: Error'; });
+
+                // Items: sample from first selected library (fast path), else 0
+                var libId = (config && Array.isArray(config.EnabledLibraryIds) && config.EnabledLibraryIds[0]) ? config.EnabledLibraryIds[0] : '';
+                if (libId) {
+                    var url = ApiClient.getUrl('Broadcast/Diagnostics/LibraryItems') + '?libraryId=' + encodeURIComponent(libId) + '&sample=0';
+                    ApiClient.ajax({ url: url, type: 'GET' })
+                        .then(function(r){ sItems.textContent = 'Items: ~' + (r && r.Total ? r.Total : 0) + ' (from first selected library)'; })
+                        .catch(function(){ sItems.textContent = 'Items: Unknown'; });
+                } else {
+                    sItems.textContent = 'Items: Unknown (no library selected)';
+                }
+            }
+
+            function loadLibraries(page, enabledIds) {
+                var librarySelection = page.querySelector('#librarySelection');
+                var toggleCounts = page.querySelector('#toggleCounts');
+                librarySelection.innerHTML = '<em>Loading libraries...</em>';
+
+                function renderLibraries(items) {
+                    var container = librarySelection;
+                    if (!container) {
+                        console && console.error && console.error('[Broadcast] librarySelection container missing');
+                        return;
+                    }
+                    console && console.debug && console.debug('[Broadcast] renderLibraries items:', Array.isArray(items) ? items.length : typeof items);
+                    if (!items || items.length === 0) {
+                        container.innerHTML = '<em>No libraries found. Add media libraries first.</em>';
+                        return;
+                    }
+                    var html = '';
+                    items.forEach(function (library) {
+                        if (!library || !library.Id || !library.Name) { return; }
+                        var isChecked = Array.isArray(enabledIds) && enabledIds.indexOf(library.Id) !== -1;
+                        html += '<div class="checkboxContainer" data-libid="' + library.Id + '">';
+                        html += '<label class="emby-checkbox-label" style="display:flex;align-items:center;gap:.5rem;">';
+                        html += '<input type="checkbox" is="emby-checkbox" class="library-checkbox" data-libraryid="' + library.Id + '"' + (isChecked ? ' checked' : '') + ' />';
+                        html += '<span>' + library.Name + '</span>';
+                        html += '<span class="lib-count" style="opacity:.8;font-size:.9em"></span>';
+                        html += '</label>';
+                        html += '</div>';
+                    });
+                    container.innerHTML = html || '<em>No libraries available for selection.</em>';
+
+                    if (toggleCounts && toggleCounts.checked) {
+                        // Fetch counts sequentially to avoid hammering
+                        var boxes = container.querySelectorAll('.checkboxContainer');
+                        var idx = 0;
+                        function next() {
+                            if (idx >= boxes.length) return;
+                            var el = boxes[idx++];
+                            var libId = el.getAttribute('data-libid');
+                            var span = el.querySelector('.lib-count');
+                            if (!span || !libId) { next(); return; }
+                            span.textContent = ' (loading…)';
+                            var url = ApiClient.getUrl('Broadcast/Diagnostics/LibraryItems') + '?libraryId=' + encodeURIComponent(libId) + '&sample=0';
+                            ApiClient.ajax({ url: url, type: 'GET' })
+                                .then(function(r){ span.textContent = r && typeof r.Total === 'number' ? ' (' + r.Total + ' items)' : ''; })
+                                .catch(function(){ span.textContent = ''; })
+                                .finally(function(){ setTimeout(next, 50); });
+                        }
+                        next();
+                    }
+
+                    // Defer a re-render in case view manager replaced the subtree post-render
+                    setTimeout(function(){
+                        var c2 = document.querySelector('#librarySelection');
+                        if (c2 && c2.children.length === 0 && items && items.length) {
+                            console && console.debug && console.debug('[Broadcast] Re-rendering libraries after view update');
+                            c2.innerHTML = container.innerHTML;
+                        }
+                    }, 200);
+                }
+
+                function loadByUserId(userId) {
+                    console && console.debug && console.debug('[Broadcast] loadByUserId:', userId);
+                    ApiClient.ajax({
+                        url: ApiClient.getUrl('Users/' + userId + '/Views'),
+                        type: 'GET'
+                    }).then(function (result) {
+                        console && console.debug && console.debug('[Broadcast] /Users/{id}/Views result keys:', Object.keys(result || {}));
+                        var items = Array.isArray(result) ? result : (result && result.Items ? result.Items : []);
+                        renderLibraries(items);
+                    }).catch(function (err) {
+                        console && console.error && console.error('Failed to load user views', err);
+                        librarySelection.innerHTML = '<em>Failed to load libraries.</em>';
+                    });
+                }
+
+                try {
+                    var uid = ApiClient.getCurrentUserId && ApiClient.getCurrentUserId();
+                    if (uid) {
+                        loadByUserId(uid);
+                    } else {
+                        ApiClient.ajax({ url: ApiClient.getUrl('Users/Me'), type: 'GET' }).then(function (me) {
+                            loadByUserId(me && me.Id ? me.Id : '');
+                        }).catch(function (e) {
+                            console && console.error && console.error('Failed to resolve current user', e);
+                            librarySelection.innerHTML = '<em>Failed to load libraries.</em>';
+                        });
+                    }
+                } catch (e) {
+                    console && console.error && console.error('Unexpected error loading libraries', e);
+                    librarySelection.innerHTML = '<em>Failed to load libraries.</em>';
+                }
+
+                if (toggleCounts) {
+                    toggleCounts.addEventListener('change', function(){
+                        // Re-render to populate/remove counts
+                        ApiClient.getPluginConfiguration(BroadcastConfig.pluginUniqueId).then(function (config) {
+                            loadLibraries(page, config.EnabledLibraryIds || []);
+                        });
+                    });
+                }
+            }
+
+            function saveConfig(page) {
+                try { Dashboard.showLoadingMsg(); } catch(_) {}
+                ApiClient.getPluginConfiguration(BroadcastConfig.pluginUniqueId).then(function (config) {
+                    config.CommercialsFolder = page.querySelector('#CommercialsFolder').value;
+                    config.EpisodeDuration = parseInt(page.querySelector('#EpisodeDuration').value);
+                    config.CommercialFrequency = parseInt(page.querySelector('#CommercialFrequency').value);
+
+                    var selectedLibraries = [];
+                    var checkboxes = page.querySelectorAll('.library-checkbox:checked');
+                    for (var i = 0; i < checkboxes.length; i++) {
+                        selectedLibraries.push(checkboxes[i].getAttribute('data-libraryid'));
+                    }
+                    config.EnabledLibraryIds = selectedLibraries;
+
+                    ApiClient.updatePluginConfiguration(BroadcastConfig.pluginUniqueId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        var fb = document.querySelector('#saveFeedback');
+                        if (fb) { fb.style.display = 'block'; setTimeout(function(){ fb.style.display = 'none'; }, 1200); }
+                        refreshStatus(config);
+                    });
+                }).finally(function(){ try { Dashboard.hideLoadingMsg(); } catch(_) {} });
+            }
+
+            function renderJson(target, data) {
+                try {
+                    target.textContent = JSON.stringify(data, null, 2);
+                } catch (e) {
+                    target.textContent = String(data);
+                }
+            }
+
+            function runDiagnostics() {
+                var diag = document.querySelector('#diagnosticsDisplay');
+                document.querySelector('#btnDiagConfig').addEventListener('click', function() {
+                    ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Config'), type: 'GET' })
+                        .then(function(data) { renderJson(diag, data); })
+                        .catch(function(err) { renderJson(diag, { error: 'Failed to load config', detail: err }); });
+                });
+                document.querySelector('#btnDiagLibraries').addEventListener('click', function() {
+                    ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Libraries'), type: 'GET' })
+                        .then(function(data) { renderJson(diag, data); })
+                        .catch(function(err) { renderJson(diag, { error: 'Failed to load libraries', detail: err }); });
+                });
+                document.querySelector('#btnDiagLibraryItems').addEventListener('click', function() {
+                    // Use the first selected library if any, otherwise prompt with first available checkbox
+                    var selected = document.querySelector('.library-checkbox:checked');
+                    var id = selected ? selected.getAttribute('data-libraryid') : null;
+                    if (!id) {
+                        var any = document.querySelector('.library-checkbox');
+                        id = any ? any.getAttribute('data-libraryid') : '';
+                    }
+                    var url = ApiClient.getUrl('Broadcast/Diagnostics/LibraryItems') + '?libraryId=' + encodeURIComponent(id);
+                    ApiClient.ajax({ url: url, type: 'GET' })
+                        .then(function(data) { renderJson(diag, data); })
+                        .catch(function(err) { renderJson(diag, { error: 'Failed to load library items', detail: err, libraryId: id }); });
+                });
+                document.querySelector('#btnDiagCommercials').addEventListener('click', function() {
+                    ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Commercials'), type: 'GET' })
+                        .then(function(data) { renderJson(diag, data); })
+                        .catch(function(err) { renderJson(diag, { error: 'Failed to load commercials', detail: err }); });
+                });
+                document.querySelector('#btnDiagSchedule').addEventListener('click', function() {
+                    ApiClient.ajax({ url: ApiClient.getUrl('Broadcast/Diagnostics/Schedule'), type: 'GET' })
+                        .then(function(data) { renderJson(diag, data); })
+                        .catch(function(err) { renderJson(diag, { error: 'Failed to load schedule diagnostics', detail: err }); });
+                });
+            }
+
+            function initBroadcastPage(pageEl) {
+                if (!pageEl) { return; }
+                console && console.debug && console.debug('[Broadcast] initBroadcastPage');
+                loadConfig(pageEl);
+                loadSchedule();
+                runDiagnostics();
+            }
+
+            // Initialize when the Jellyfin web view framework shows the page
+            document.addEventListener('viewshow', function (e) {
+                var t = e && (e.detail && e.detail.view || e.target);
+                if (t && t.id === 'BroadcastConfigPage') {
+                    initBroadcastPage(t);
+                }
+            });
+            // Fallback for older event name
+            document.addEventListener('pageshow', function (e) {
+                var t = e && (e.detail && e.detail.view || e.target);
+                if (t && t.id === 'BroadcastConfigPage') {
+                    initBroadcastPage(t);
+                }
+            });
+
+            // Immediate init if page element is already in DOM
+            (function immediateInit() {
+                var page = document.getElementById('BroadcastConfigPage');
+                if (page) {
+                    // Defer to allow component upgrades
+                    setTimeout(function(){ initBroadcastPage(page); }, 0);
+                }
+            })();
+
+            document.querySelector('#BroadcastConfigForm').addEventListener('submit', function(e) {
+                saveConfig(document.querySelector('#BroadcastConfigPage'));
+                e.preventDefault();
+                return false;
+            });
+
+            document.querySelector('#btnRegenerate').addEventListener('click', function() {
+                var btn = this;
+                btn.disabled = true;
+                ApiClient.ajax({
+                    url: ApiClient.getUrl('Broadcast/Schedule/Regenerate'),
+                    type: 'POST'
+                }).then(function() {
+                    loadSchedule();
+                    // Also refresh status
+                    ApiClient.getPluginConfiguration(BroadcastConfig.pluginUniqueId).then(function (config) { refreshStatus(config); });
+                }).finally(function(){ btn.disabled = false; });
+            });
+
+            document.querySelector('#btnRefreshLibraries').addEventListener('click', function() {
+                var page = document.querySelector('#BroadcastConfigPage');
+                ApiClient.getPluginConfiguration(BroadcastConfig.pluginUniqueId).then(function (config) {
+                    loadLibraries(page, config.EnabledLibraryIds || []);
+                });
+            });
+
+            function loadSchedule() {
+                ApiClient.ajax({
+                    url: ApiClient.getUrl('Broadcast/Schedule'),
+                    type: 'GET'
+                }).then(function(data) {
+                    var container = document.querySelector('#scheduleDisplay');
+                    if (!container) {
+                        console && console.error && console.error('[Broadcast] scheduleDisplay container missing');
+                        return;
+                    }
+                    var items = Array.isArray(data) ? data : (data && Array.isArray(data.Items) ? data.Items : []);
+                    if (!items || items.length === 0) {
+                        container.innerHTML = '<em>No schedule generated yet.</em>';
+                        return;
+                    }
+                    var html = '<div><strong>Items:</strong> ' + items.length + '</div>';
+                    html += '<table class="broadcastSchedule"><thead><tr><th>#</th><th>Poster</th><th>Media</th><th>Start (UTC)</th><th>End (UTC)</th></tr></thead><tbody>';
+                    items.slice(0, 50).forEach(function(entry, idx) {
+                        var startIso = entry && entry.Start ? new Date(entry.Start).toISOString() : '';
+                        var endIso = entry && entry.End ? new Date(entry.End).toISOString() : '';
+                        var img = entry && entry.ImageUrl ? '<img src="' + entry.ImageUrl + '" style="height:48px;border-radius:3px;object-fit:cover;" />' : '';
+                        html += '<tr><td>' + (idx + 1) + '</td><td>' + img + '</td><td>' + (entry.MediaName || '') + '</td><td>' + startIso + '</td><td>' + endIso + '</td></tr>';
+                    });
+                    if (items.length > 50) {
+                        html += '<tr><td colspan="4" style="opacity:.8;">… ' + (items.length - 50) + ' more entries</td></tr>';
+                    }
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }).catch(function (err) {
+                    var container = document.querySelector('#scheduleDisplay');
+                    console && console.error && console.error('Failed to load schedule', err);
+                    if (container) {
+                        container.innerHTML = '<em>Failed to load schedule.</em>';
+                    }
+                });
+            }
+        </script>
+    </div>
+</body>
+</html>

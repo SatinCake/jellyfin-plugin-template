@@ -1,0 +1,19 @@
+---
+name: "Broadcast"
+guid: "eb5d7894-8eef-4b36-aa6f-5d124e828ce1"
+version: "0.1.0.0"
+targetAbi: "10.9.0.0"
+framework: "net8.0"
+overview: "TV-like broadcast channel from your libraries with optional ad breaks, IPTV playlist and XMLTV guide."
+description: >
+  Broadcast generates a continuous, TV-style channel from your existing Jellyfin libraries. It builds a configurable
+  schedule (duration and alignment), inserts optional commercials from a folder, and exposes an IPTV playlist (M3U)
+  and XMLTV EPG for Jellyfin Live TV integration. The plugin also includes a rich configuration page with
+  schedule previews and diagnostics.
+category: "Live TV"
+owner: "satincake"
+artifacts:
+- "Jellyfin.Plugin.Broadcast.dll"
+changelog: >
+  0.1.0
+  - Initial public version with schedule generation, thumbnails, IPTV (M3U, XMLTV), diagnostics endpoints.
