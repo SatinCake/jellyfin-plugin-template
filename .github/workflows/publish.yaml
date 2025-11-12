@@ -16,3 +16,49 @@ jobs:
       deploy-host: ${{ secrets.DEPLOY_HOST }}
       deploy-user: ${{ secrets.DEPLOY_USER }}
       deploy-key: ${{ secrets.DEPLOY_KEY }}
+
+  annotate-release:
+    if: github.event_name == 'release'
+    needs: call
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Append manifest links to release body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release = context.payload.release;
+            if (!release) {
+              core.info('No release payload found; skipping.');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = release.tag_name;
+            const defaultBranch = context.payload.repository?.default_branch || 'main';
+
+            const base = `https://raw.githubusercontent.com/${owner}/${repo}`;
+            const stableUrl = `${base}/${defaultBranch}/manifest.json`;
+            const tagUrl = `${base}/${tag}/manifest.json`;
+
+            const marker = '\n\n---\nManifest links (copy into Jellyfin):\n';
+            const links = [
+              `Stable: ${stableUrl}`,
+              `This release: ${tagUrl}`
+            ].join('\n');
+
+            const body = (release.body || '');
+            if (body.includes('Manifest links (copy into Jellyfin):')) {
+              core.info('Manifest links already present; skipping update.');
+              return;
+            }
+
+            const newBody = body + marker + links + '\n';
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              body: newBody
+            });
+            core.info('Updated release description with manifest links.');
