@@ -44,16 +44,16 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          ZIP_NAME="broadcast_${VERSION}.zip"
+          ZIP_NAME="Jellyfin.Plugin.Broadcast-${VERSION}.zip"
           (cd out/publish && zip -r ../"$ZIP_NAME" .)
           echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
 
-      - name: Compute checksum (md5)
+      - name: Compute checksum (sha256)
         id: checksum
         shell: bash
         run: |
-          SUM=$(md5sum out/${ZIP_NAME} | awk '{print $1}')
-          echo "CHECKSUM=${SUM}" >> $GITHUB_ENV
+          SUM=$(sha256sum out/${ZIP_NAME} | awk '{print $1}')
+          echo "CHECKSUM=sha256:${SUM}" >> $GITHUB_ENV
 
       - name: Upload asset to release
         uses: softprops/action-gh-release@v2
@@ -71,7 +71,7 @@ jobs:
           script: |
             const {owner, repo} = context.repo;
             const tag = context.payload.release.tag_name;
-            const name = `broadcast_${process.env.VERSION}.zip`;
+            const name = `Jellyfin.Plugin.Broadcast-${process.env.VERSION}.zip`;
             const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
             const asset = rel.data.assets.find(a => a.name === name);
             if (!asset) {

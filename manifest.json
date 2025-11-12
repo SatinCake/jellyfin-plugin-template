@@ -3,19 +3,18 @@
     "guid": "eb5d7894-8eef-4b36-aa6f-5d124e828ce1",
     "name": "Broadcast",
     "overview": "TV-like broadcast channel from your libraries with optional ad breaks, IPTV playlist and XMLTV guide.",
-    "description": "Broadcast generates a continuous, TV-style channel from your existing Jellyfin libraries. It builds a configurable schedule, inserts optional commercials, and exposes IPTV (M3U) and XMLTV endpoints for Live TV integration.",
+    "description": "Broadcast generates a continuous, TV-style channel from your Jellyfin libraries with optional commercials. Includes IPTV playlist (M3U) and XMLTV EPG endpoints.",
     "owner": "satincake",
     "category": "Live TV",
     "versions": [
       {
-        "version": "0.1.0.0",
-        "changelog": "- Initial public version with schedule generation, thumbnails, IPTV (M3U, XMLTV), diagnostics endpoints.",
+        "version": "0.1.4",
+        "changelog": "See GitHub release notes for details.",
         "targetAbi": "10.9.0.0",
-        "sourceUrl": "https://github.com/satincake/jellyfin-plugin-broadcast/releases/download/v0.1.0.0/broadcast_0.1.0.0.zip",
-        "checksum": "",
-        "timestamp": ""
+        "sourceUrl": "https://github.com/SatinCake/jellyfin-plugin-template/releases/download/v0.1.4/Jellyfin.Plugin.Broadcast-0.1.4.zip",
+        "checksum": "sha256:1fc5276804942b5a862ca0a6e132a2ac750457da0a57a0899d38c20a5cb3dda9",
+        "timestamp": "2025-11-12T04:09:31Z"
       }
     ]
   }
 ]
-
