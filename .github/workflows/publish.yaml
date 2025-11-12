@@ -2,8 +2,7 @@ name: '🚀 Publish Plugin'
 
 on:
   release:
-    types:
-      - released
+    types: [published, prereleased]
   workflow_dispatch:
 
 jobs:
@@ -29,36 +28,22 @@ jobs:
         with:
           script: |
             const release = context.payload.release;
-            if (!release) {
-              core.info('No release payload found; skipping.');
-              return;
-            }
+            if (!release) { core.info('No release payload found; skipping.'); return; }
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = release.tag_name;
             const defaultBranch = context.payload.repository?.default_branch || 'main';
-
             const base = `https://raw.githubusercontent.com/${owner}/${repo}`;
             const stableUrl = `${base}/${defaultBranch}/manifest.json`;
             const tagUrl = `${base}/${tag}/manifest.json`;
-
-            const marker = '\n\n---\nManifest links (copy into Jellyfin):\n';
-            const links = [
-              `Stable: ${stableUrl}`,
-              `This release: ${tagUrl}`
+            const markerTitle = 'Manifest links (copy into Jellyfin):';
+            if ((release.body || '').includes(markerTitle)) { core.info('Manifest links already present; skipping update.'); return; }
+            const block = [
+              '', '---', markerTitle, '',
+              'Recommended (immutable for this version):', tagUrl, '',
+              'Stable (always latest on default branch):', stableUrl, '',
+              'Usage: Jellyfin admin -> Plugins -> Repositories -> Add -> paste one URL above.', '---', ''
             ].join('\n');
-
-            const body = (release.body || '');
-            if (body.includes('Manifest links (copy into Jellyfin):')) {
-              core.info('Manifest links already present; skipping update.');
-              return;
-            }
-
-            const newBody = body + marker + links + '\n';
-            await github.rest.repos.updateRelease({
-              owner,
-              repo,
-              release_id: release.id,
-              body: newBody
-            });
+            const newBody = (release.body || '') + block;
+            await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, body: newBody });
             core.info('Updated release description with manifest links.');
