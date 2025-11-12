@@ -13,10 +13,11 @@ jobs:
     env:
       PROJECT: Jellyfin.Plugin.Broadcast/Jellyfin.Plugin.Broadcast.csproj
     steps:
-      - name: Checkout
+      - name: Checkout tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -79,6 +80,14 @@ jobs:
             }
             return asset.browser_download_url;
 
+      - name: Switch to default branch for manifest update
+        shell: bash
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout "$DEFAULT_BRANCH"
+          git pull --ff-only origin "$DEFAULT_BRANCH"
+
       - name: Update manifest.json (array layout)
         uses: actions/github-script@v7
         env:
@@ -106,7 +115,17 @@ jobs:
               checksum: process.env.CHECKSUM,
               timestamp: new Date().toISOString()
             };
-            plugin.versions = [entry, ...plugin.versions.filter(v => v.version !== entry.version)];
+            // Keep only required keys per version entry
+            const sanitize = v => ({
+              version: v.version,
+              changelog: v.changelog,
+              targetAbi: v.targetAbi,
+              sourceUrl: v.sourceUrl,
+              checksum: v.checksum,
+              timestamp: v.timestamp
+            });
+            const filtered = plugin.versions.filter(v => v.version !== entry.version).map(sanitize);
+            plugin.versions = [entry, ...filtered];
             fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
 
       - name: Commit manifest.json
@@ -114,4 +133,4 @@ jobs:
         with:
           commit_message: "chore: update manifest for release ${{ env.VERSION }}"
           file_pattern: manifest.json
-
+          branch: ${{ github.event.repository.default_branch }}
