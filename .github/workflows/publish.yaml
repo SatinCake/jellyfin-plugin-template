@@ -36,14 +36,14 @@ jobs:
             const base = `https://raw.githubusercontent.com/${owner}/${repo}`;
             const stableUrl = `${base}/${defaultBranch}/manifest.json`;
             const tagUrl = `${base}/${tag}/manifest.json`;
-            const markerTitle = 'Manifest links (copy into Jellyfin):';
-            if ((release.body || '').includes(markerTitle)) { core.info('Manifest links already present; skipping update.'); return; }
+            const markerTitle = 'Manifest link for Jellyfin (copy/paste):';
+            if ((release.body || '').includes(markerTitle)) { core.info('Manifest link already present; skipping update.'); return; }
             const block = [
               '', '---', markerTitle, '',
-              'Recommended (immutable for this version):', tagUrl, '',
-              'Stable (always latest on default branch):', stableUrl, '',
-              'Usage: Jellyfin admin -> Plugins -> Repositories -> Add -> paste one URL above.', '---', ''
+              tagUrl, '',
+              'Optional (always latest):', stableUrl, '',
+              'Jellyfin: Plugins -> Repositories -> Add -> paste the URL above.', '---', ''
             ].join('\n');
             const newBody = (release.body || '') + block;
             await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, body: newBody });
-            core.info('Updated release description with manifest links.');
+            core.info('Updated release description with manifest link.');

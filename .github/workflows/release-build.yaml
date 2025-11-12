@@ -1,0 +1,117 @@
+name: '📦 Build & Update Manifest on Release'
+
+on:
+  release:
+    types: [published, prereleased]
+
+permissions:
+  contents: write
+
+jobs:
+  build-zip-update-manifest:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: Jellyfin.Plugin.Broadcast/Jellyfin.Plugin.Broadcast.csproj
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Derive version and ABI from tag and build.yaml
+        id: meta
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}" # e.g. v0.1.0.0
+          VERSION="${TAG#v}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          # Extract targetAbi from build.yaml if present
+          TARGET_ABI=$(grep -E '^targetAbi:' build.yaml | sed -E 's/.*"([^"]+)".*/\1/') || true
+          if [ -z "$TARGET_ABI" ]; then TARGET_ABI="10.9.0.0"; fi
+          echo "TARGET_ABI=${TARGET_ABI}" >> $GITHUB_ENV
+
+      - name: Build plugin (publish)
+        run: |
+          dotnet publish "$PROJECT" -c Release -o out/publish
+
+      - name: Create zip artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          ZIP_NAME="broadcast_${VERSION}.zip"
+          (cd out/publish && zip -r ../"$ZIP_NAME" .)
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Compute checksum (md5)
+        id: checksum
+        shell: bash
+        run: |
+          SUM=$(md5sum out/${ZIP_NAME} | awk '{print $1}')
+          echo "CHECKSUM=${SUM}" >> $GITHUB_ENV
+
+      - name: Upload asset to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/${{ env.ZIP_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get asset URL
+        id: asset
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const {owner, repo} = context.repo;
+            const tag = context.payload.release.tag_name;
+            const name = `broadcast_${process.env.VERSION}.zip`;
+            const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            const asset = rel.data.assets.find(a => a.name === name);
+            if (!asset) {
+              core.setFailed(`Asset not found: ${name}`);
+              return;
+            }
+            return asset.browser_download_url;
+
+      - name: Update manifest.json (array layout)
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ env.VERSION }}
+          TARGET_ABI: ${{ env.TARGET_ABI }}
+          CHECKSUM: ${{ env.CHECKSUM }}
+          ASSET_URL: ${{ steps.asset.outputs.result }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'manifest.json';
+            const text = fs.readFileSync(path, 'utf8');
+            const manifest = JSON.parse(text);
+            if (!Array.isArray(manifest) || manifest.length === 0) {
+              core.setFailed('manifest.json must be an array with at least one plugin object.');
+              return;
+            }
+            const plugin = manifest[0];
+            plugin.versions = plugin.versions || [];
+            const entry = {
+              version: process.env.VERSION,
+              changelog: (context.payload.release.body || '').trim(),
+              targetAbi: process.env.TARGET_ABI,
+              sourceUrl: process.env.ASSET_URL,
+              checksum: process.env.CHECKSUM,
+              timestamp: new Date().toISOString()
+            };
+            plugin.versions = [entry, ...plugin.versions.filter(v => v.version !== entry.version)];
+            fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+
+      - name: Commit manifest.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update manifest for release ${{ env.VERSION }}"
+          file_pattern: manifest.json
+
