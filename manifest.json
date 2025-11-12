@@ -8,6 +8,14 @@
     "category": "Live TV",
     "versions": [
       {
+        "version": "0.1.6",
+        "changelog": "See GitHub release notes for details.",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/SatinCake/jellyfin-plugin-template/releases/download/v0.1.6/Jellyfin.Plugin.Broadcast-0.1.6.zip",
+        "checksum": "sha256:769fe99a6161fcc29b306d3d96cf2cdae3b59062e59ffd0e94b24bed8ce90c23",
+        "timestamp": "2025-11-12T04:20:28.997Z"
+      },
+      {
         "version": "0.1.4",
         "changelog": "See GitHub release notes for details.",
         "targetAbi": "10.9.0.0",
