@@ -7,19 +7,18 @@
   "owner": "satincake",
   "versions": [
     {
-      "version": "0.1.0",
-      "changelog": "Initial release.",
+      "version": "0.1.1",
+      "changelog": "See GitHub release notes for details.",
       "targetAbi": "10.9.0.0",
-      "sourceUrl": "https://github.com/satincake/jellyfin-plugin-broadcast",
-      "checksum": "",
-      "timestamp": "",
+      "sourceUrl": "https://github.com/SatinCake/jellyfin-plugin-template",
+      "checksum": "sha256:17e56a76d725b6f56255ea21d2a6581838783446cfa2456fddbc11a8144acf36",
+      "timestamp": "2025-11-11T21:02:22Z",
       "artifacts": [
         {
           "name": "Jellyfin.Plugin.Broadcast.zip",
-          "url": ""
+          "url": "https://github.com/SatinCake/jellyfin-plugin-template/releases/download/v0.1.1/Jellyfin.Plugin.Broadcast-0.1.1.zip"
         }
       ]
     }
   ]
 }
-
