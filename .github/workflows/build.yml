@@ -39,6 +39,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: build
+    env:
+      REPO: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,38 +70,72 @@ jobs:
           zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll Jellyfin.Plugin.Broadcast.pdb LICENSE 2>/dev/null || zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll LICENSE 2>/dev/null || zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll
           sha256sum Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip | awk '{print $1}' > sha256.txt
 
-      - name: Generate plugin manifest (manifest.json)
+      - name: Switch to default branch for manifest update
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout "$DEFAULT_BRANCH"
+          git pull --ff-only origin "$DEFAULT_BRANCH"
+
+      - name: Derive targetAbi from build.yaml
+        id: abi
+        shell: bash
+        run: |
+          TARGET_ABI=$(grep -E '^targetAbi:' build.yaml | sed -E 's/.*"([^"]+)".*/\1/') || true
+          if [ -z "$TARGET_ABI" ]; then TARGET_ABI="10.9.0.0"; fi
+          echo "TARGET_ABI=${TARGET_ABI}" >> $GITHUB_ENV
+
+      - name: Update manifest.json (array layout)
+        uses: actions/github-script@v7
         env:
           VERSION: ${{ steps.get_version.outputs.version }}
-        run: |
-          CHECKSUM=$(cat dist/sha256.txt)
-          TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          cat > dist/manifest.json << JSON
-          {
-            "name": "Broadcast",
-            "guid": "eb5d7894-8eef-4b36-aa6f-5d124e828ce1",
-            "overview": "TV-like broadcast channel from your libraries with optional ad breaks, IPTV playlist and XMLTV guide.",
-            "description": "Broadcast generates a continuous, TV-style channel from your Jellyfin libraries with optional commercials. Includes IPTV playlist (M3U) and XMLTV EPG endpoints.",
-            "category": "Live TV",
-            "owner": "satincake",
-            "versions": [
-              {
-                "version": "${VERSION}",
-                "changelog": "See GitHub release notes for details.",
-                "targetAbi": "10.9.0.0",
-                "sourceUrl": "https://github.com/${{ github.repository }}",
-                "checksum": "sha256:${CHECKSUM}",
-                "timestamp": "${TS}",
-                "artifacts": [
-                  {
-                    "name": "Jellyfin.Plugin.Broadcast.zip",
-                    "url": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/Jellyfin.Plugin.Broadcast-${VERSION}.zip"
-                  }
-                ]
-              }
-            ]
-          }
-          JSON
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'manifest.json';
+            const version = process.env.VERSION;
+            const checksum = fs.readFileSync('dist/sha256.txt','utf8').trim();
+            const targetAbi = process.env.TARGET_ABI;
+            const ownerRepo = process.env.GITHUB_REPOSITORY || process.env.REPO;
+            const sourceUrl = `https://github.com/${ownerRepo}/releases/download/v${version}/Jellyfin.Plugin.Broadcast-${version}.zip`;
+            const timestamp = new Date().toISOString();
+            const text = fs.readFileSync(path, 'utf8');
+            const manifest = JSON.parse(text);
+            if (!Array.isArray(manifest) || !manifest.length) {
+              core.setFailed('manifest.json must be an array with at least one plugin object.');
+              return;
+            }
+            const plugin = manifest[0];
+            plugin.versions = plugin.versions || [];
+            const entry = {
+              version,
+              changelog: 'See GitHub release notes for details.',
+              targetAbi,
+              sourceUrl,
+              checksum: `sha256:${checksum}`,
+              timestamp
+            };
+            const sanitize = v => ({
+              version: v.version,
+              changelog: v.changelog,
+              targetAbi: v.targetAbi,
+              sourceUrl: v.sourceUrl,
+              checksum: v.checksum,
+              timestamp: v.timestamp
+            });
+            const filtered = plugin.versions.filter(v => v.version !== version).map(sanitize);
+            plugin.versions = [entry, ...filtered];
+            const out = JSON.stringify(manifest, null, 2) + '\n';
+            fs.writeFileSync(path, out);
+            // Also write a copy to dist for convenience upload
+            fs.writeFileSync('dist/manifest.json', out);
+
+      - name: Commit manifest.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update manifest for release v${{ steps.get_version.outputs.version }}"
+          file_pattern: manifest.json
+          branch: ${{ github.event.repository.default_branch }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -109,5 +145,10 @@ jobs:
             Jellyfin.Plugin.Broadcast/bin/Release/net8.0/Jellyfin.Plugin.Broadcast.dll
             Jellyfin.Plugin.Broadcast/bin/Release/net8.0/Jellyfin.Plugin.Broadcast.pdb
             dist/manifest.json
+          body: |
+            ---
+            Manifest link for Jellyfin (copy/paste):
+            https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.repository.default_branch }}/manifest.json
+            ---
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
