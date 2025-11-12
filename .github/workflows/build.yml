@@ -68,7 +68,9 @@ jobs:
         run: |
           cd dist
           zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll Jellyfin.Plugin.Broadcast.pdb LICENSE 2>/dev/null || zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll LICENSE 2>/dev/null || zip -9 -j Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip Jellyfin.Plugin.Broadcast.dll
+          # Compute both SHA256 and MD5 (manifest will use MD5)
           sha256sum Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip | awk '{print $1}' > sha256.txt
+          md5sum Jellyfin.Plugin.Broadcast-${{ steps.get_version.outputs.version }}.zip | awk '{print $1}' > md5.txt
 
       - name: Switch to default branch for manifest update
         run: |
@@ -94,7 +96,7 @@ jobs:
             const fs = require('fs');
             const path = 'manifest.json';
             const version = process.env.VERSION;
-            const checksum = fs.readFileSync('dist/sha256.txt','utf8').trim();
+            const checksumMd5 = fs.readFileSync('dist/md5.txt','utf8').trim();
             const targetAbi = process.env.TARGET_ABI;
             const ownerRepo = process.env.GITHUB_REPOSITORY || process.env.REPO;
             const sourceUrl = `https://github.com/${ownerRepo}/releases/download/v${version}/Jellyfin.Plugin.Broadcast-${version}.zip`;
@@ -112,7 +114,7 @@ jobs:
               changelog: 'See GitHub release notes for details.',
               targetAbi,
               sourceUrl,
-              checksum: `sha256:${checksum}`,
+              checksum: checksumMd5,
               timestamp
             };
             const sanitize = v => ({
@@ -147,8 +149,9 @@ jobs:
             dist/manifest.json
           body: |
             ---
-            Manifest link for Jellyfin (copy/paste):
-            https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.repository.default_branch }}/manifest.json
+            Manifest links (copy/paste):
+            Tag-specific (recommended): https://raw.githubusercontent.com/${{ github.repository }}/v${{ steps.get_version.outputs.version }}/manifest.json
+            Stable (always latest):     https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.repository.default_branch }}/manifest.json
             ---
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
